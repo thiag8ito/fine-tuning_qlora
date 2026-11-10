@@ -1,0 +1,9 @@
+# Dependências do notebook 01 (roda em CPU). O notebook 02 roda no Colab e não precisa de nada local.
+anthropic>=0.40
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+tqdm>=4.66
+kagglehub>=0.3
+python-dotenv>=1.0
+ipykernel>=6.29
