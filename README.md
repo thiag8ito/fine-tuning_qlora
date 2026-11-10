@@ -163,18 +163,18 @@ Rode `notebooks/03_analise_de_erros_colab.ipynb` com o `data.zip`. Ele carrega o
 
 Versões usadas: 
 
-accelerate==1.15.0
-bitsandbytes==0.50.2
-peft==0.21.2
-sentence-transformers==5.7.0
-torch==2.11.0+cu130
-torchao==0.10.0
-torchaudio==2.11.0+cu130
-torchcodec==0.11.0+cu130
-torchdata==0.11.0
-torchsummary==1.5.1
-torchtune==0.6.1
-torchvision==0.26.0+cu130
-transformers==5.22.0
+accelerate==1.15.0  
+bitsandbytes==0.50.2  
+peft==0.21.2  
+sentence-transformers==5.7.0  
+torch==2.11.0+cu130  
+torchao==0.10.0  
+torchaudio==2.11.0+cu130  
+torchcodec==0.11.0+cu130  
+torchdata==0.11.0  
+torchsummary==1.5.1  
+torchtune==0.6.1  
+torchvision==0.26.0+cu130  
+transformers==5.22.0  
 
 
