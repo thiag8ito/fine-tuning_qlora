@@ -75,4 +75,5 @@ O prompt de sistema deve ser **o mesmo usado no treino** (acima).
 
 ## Reprodução
 
-Código e notebooks: https://github.com/SEU_USUARIO/ifood-qlora-aspectos
+Código e notebooks: https://github.com/thiag8ito/fine-tunning_qlora
+
