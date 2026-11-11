@@ -127,39 +127,31 @@ Few-shot e prompt engineering como baseline mais forte; ablação de `r` (8/16/3
 
 ## Como rodar
 
-O projeto tem duas partes: **notebook 1 local** (VS Code, só CPU, usa a API da Anthropic) e **notebook 2 no Colab** (fine-tuning na GPU T4).
+Todo o projeto roda no **Google Colab** com GPU T4 (gratuita ou com unidades de computação), sem GPU local e **sem chave de API**. Os rótulos são gerados por um modelo aberto (Qwen2.5-7B-Instruct) dentro do próprio Colab. Os notebooks são executados em ordem e trocam dados pelo arquivo `data.zip`.
 
-### Parte 1: notebook 1, no VS Code
+**Pré-requisitos:** conta Google (Colab) e conta no Hugging Face com um token de **escrita** (huggingface.co/settings/tokens), necessário só para publicar o adaptador no notebook 2.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-cp .env.example .env               # edite e preencha ANTHROPIC_API_KEY
-```
+| # | Notebook | O que faz | Entrada | Saída | Tempo na T4 |
+|---|---|---|---|---|---|
+| 1 | [`01_preparar_dados_colab`](notebooks/01_preparar_dados_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tunning_qlora/blob/main/notebooks/01_preparar_dados_colab.ipynb) | Baixa o Olist, rotula com o Qwen 7B, separa treino/validação/teste, exporta o teste para revisão e calcula o kappa | CSV revisado | `data.zip` | ~30 min |
+| 2 | [`02_qlora_avaliacao_publicacao_colab`](notebooks/02_qlora_avaliacao_publicacao_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tunning_qlora/blob/main/notebooks/02_qlora_avaliacao_publicacao_colab.ipynb) | Mede o baseline, treina o QLoRA, avalia e publica o adaptador | `data.zip` | `resultados.zip` e adaptador no Hugging Face | ~1 h |
+| 3 | [`03_analise_de_erros_colab`](notebooks/03_analise_de_erros_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tunning_qlora/blob/main/notebooks/03_analise_de_erros_colab.ipynb) | Carrega o adaptador do Hub e analisa os erros no teste | `data.zip` | `erros_modelo.csv` | ~5 min |
 
-1. Abra a pasta no VS Code (extensões *Python* e *Jupyter*) e escolha o kernel `.venv` no notebook.
-2. Rode `notebooks/01_preparar_dados.ipynb`. Comece com `N_LABEL = 100` para testar e ver o consumo de tokens.
-3. Revise `data/test_para_revisao.csv` (Excel, Sheets ou LibreOffice) e salve como `data/test_revisado.csv`.
-4. Rode as células finais: concordância e geração do `data.zip`.
+### Passo a passo
 
-**Custo da API:** com 10 avaliações por chamada, ~3.000 avaliações usam da ordem de 0,3 milhão de tokens de entrada e 0,1 milhão de saída (estimativa; o notebook imprime o uso real).
+1. **Notebook 1.** Abra pelo botão, escolha *Ambiente de execução → Alterar tipo → T4 GPU* e rode as células em ordem. Ao fim da rotulagem, o `test_para_revisao.csv` é baixado automaticamente.
+2. **Revisão humana.** Abra o CSV no Google Sheets, corrija `produto`, `entrega` e `atendimento` conforme o [guia de anotação](#guia-de-anotação), baixe como CSV e envie na célula seguinte. Ela confere se o arquivo pertence ao mesmo split, calcula o kappa e verifica que treino, validação e teste não se sobrepõem. Por fim, baixe o `data.zip`.
+3. **Notebook 2.** Em uma sessão nova com T4, envie o `data.zip` na primeira célula, ajuste `HF_USER` e faça o login quando a célula de publicação pedir o token. Antes de treinar, confira a linha `passos totais` (~300 com 2.400 amostras de treino). No fim, baixe o `resultados.zip`.
+4. **Notebook 3.** Em outra sessão, envie o `data.zip` de novo. Ele gera `results/erros_modelo.csv`, que alimenta a análise de erros.
 
-**Alternativa sem a API:** `notebooks/01_preparar_dados_colab.ipynb` faz toda a preparação no Colab, rotulando com o Qwen2.5-7B-Instruct na GPU (grátis, mais lento e com rótulos um pouco mais ruidosos). Ele gera o mesmo `data.zip`.
+Os arquivos do Colab somem quando a sessão termina, então baixe o `data.zip`, o `resultados.zip` e o `erros_modelo.csv` antes de fechar.
 
-### Parte 2: notebook 2, no Colab
+### Reprodutibilidade
 
-1. Em colab.research.google.com, *Arquivo → Fazer upload de notebook* e envie `notebooks/02_qlora_avaliacao_publicacao_colab.ipynb`.
-2. *Ambiente de execução → Alterar tipo → T4 GPU*.
-3. Rode a primeira célula e selecione o `data.zip`.
-4. Ajuste `HF_USER` e faça login no Hugging Face (`notebook_login`) quando chegar na publicação.
-5. No fim, baixe o `resultados.zip` (métricas, curva de loss e model card) antes de encerrar a sessão.
-
-Se a GPU gratuita estiver bloqueada, espere liberar ou use o Pay As You Go: uma execução completa do notebook 2 deve consumir poucas unidades.
-
-### Parte 3: análise de erros (Colab)
-
-Rode `notebooks/03_analise_de_erros_colab.ipynb` com o `data.zip`. Ele carrega o adaptador do Hugging Face, confere as métricas, gera relatório por classe, matrizes de confusão, contagem de erros por tipo e o `results/erros_modelo.csv` para categorização manual.
+- As sementes são fixas (`SEED = 42`), e as versões testadas estão em [Versões usadas](#versões-usadas).
+- A rotulagem silver e o treino em 4-bit na GPU não são totalmente determinísticos, então reexecutar pode dar números ligeiramente diferentes.
+- O teste revisado **não é distribuído** (o Olist tem licença própria). Quem repetir o projeto gera o seu `test_para_revisao.csv` e faz a própria revisão, e as métricas podem diferir.
+- Se a GPU gratuita estiver bloqueada, espere liberar ou use o Pay As You Go do Colab.
 
 Versões usadas: 
 
