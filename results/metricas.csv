@@ -1,0 +1,4 @@
+modelo,json_valido,f1_produto,acc_produto,f1_entrega,acc_entrega,f1_atendimento,acc_atendimento,f1_macro_medio,exact_match,f1_mencao
+Qwen2.5-1.5B zero-shot,0.96,0.575,0.693,0.522,0.68,0.319,0.48,0.472,0.267,0.758
+TF-IDF + LogReg,1.0,0.69,0.767,0.604,0.803,0.466,0.74,0.587,0.487,0.838
+Qwen2.5-1.5B + QLoRA,1.0,0.805,0.877,0.689,0.913,0.577,0.887,0.691,0.733,0.923
