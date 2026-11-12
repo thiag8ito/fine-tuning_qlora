@@ -2,8 +2,7 @@
 .env
 .env.*
 !.env.example
-*.key
-*token*.txt
+
 
 # ---------- Dados ----------
 # O Olist tem licença própria (confira no Kaggle); o repositório ensina a baixar, não redistribui.
@@ -14,27 +13,22 @@ labels_cache.jsonl
 test_revisado*.csv
 test_para_revisao*.csv
 
+
 # ---------- Treino e modelos (o adaptador vive no Hugging Face) ----------
 out/
 checkpoint-*/
 *.safetensors
 *.bin
 *.pt
-*.pth
-*.ckpt
-wandb/
-runs/
+
 
 # ---------- Python e notebooks ----------
 .venv/
-venv/
 __pycache__/
-*.pyc
 .ipynb_checkpoints/
-.cache/
+
 
 # ---------- Editor e sistema ----------
 .vscode/
-.idea/
 .DS_Store
 Thumbs.db

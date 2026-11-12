@@ -1,29 +1,66 @@
 # Análise de sentimento por aspecto em português com QLoRA
 
-Fine-tuning de um LLM pequeno (Qwen2.5-1.5B-Instruct, 4-bit) para ler uma avaliação de cliente e devolver o sentimento por aspecto em JSON:
+[![Hugging Face](https://img.shields.io/badge/🤗%20Adaptador-Hugging%20Face-yellow)](https://huggingface.co/thiag8ito/qwen2.5-1.5b-aspectos-ecommerce-ptbr-qlora)
+[![License](https://img.shields.io/badge/licença-Apache%202.0-blue)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![Colab](https://img.shields.io/badge/roda%20no-Colab%20T4-orange)
+
+Fine-tuning de um LLM pequeno (**Qwen2.5-1.5B-Instruct**, 4-bit, **QLoRA**) para ler uma avaliação de cliente em português e devolver o sentimento por aspecto em JSON:
 
 ```
 "Produto ótimo, mas o pedido atrasou 10 dias e ninguém respondeu."
 → {"produto":"positivo","entrega":"negativo","atendimento":"negativo"}
 ```
 
-Os notebooks rodam no **Google Colab (GPU T4)**. O adaptador publicado tem poucos MB.
+## Resumo
 
-- 🤗 Adaptador: [`thiag8ito/qwen2.5-1.5b-aspectos-ecommerce-ptbr-qlora`](https://huggingface.co/thiag8ito/qwen2.5-1.5b-aspectos-ecommerce-ptbr-qlora)
-- Notebooks: `01_preparar_dados_colab.ipynb` (dados e rótulos), `02_qlora_avaliacao_publicacao_colab.ipynb` (treino, avaliação, publicação) e `03_analise_de_erros_colab.ipynb` (análise de erros), em `notebooks/`
+- **Tarefa:** classificar `produto`, `entrega` e `atendimento` em `positivo`, `negativo`, `neutro` ou `ausente`, em avaliações de e-commerce (Olist).
+- **Resultado:** o QLoRA leva o **F1 macro médio de 0.472 (zero-shot) para 0.691** e o **exact match de 0.267 para 0.733**, supera o baseline TF-IDF + Regressão Logística (0.587 e 0.487) e passa a devolver **JSON válido em 100%** dos casos (96% no zero-shot). Teste de 300 avaliações com rótulo humano.
+- **Metodologia:** rótulos de treino *silver* gerados por um LLM maior (Qwen2.5-7B-Instruct, 4-bit, no próprio Colab), teste revisado por humano, baselines justos (mesmo prompt) e análise de erros.
+- **Custo:** treino em GPU T4 gratuita do Colab; o adaptador publicado tem poucos MB.
 
-## Por que esse problema 
+| Modelo | F1 macro médio | Exact match |
+|---|---|---|
+| Qwen2.5-1.5B zero-shot | 0.472 | 0.267 |
+| TF-IDF + LogReg | 0.587 | 0.487 |
+| **Qwen2.5-1.5B + QLoRA** | **0.691** | **0.733** |
 
-Avaliações misturam aspectos: "produto ótimo, entrega péssima" não cabe em uma nota única. Saber **qual** aspecto falhou permite rotear o problema (logística, loja, suporte) e priorizar ações. O dataset usado é o Olist (e-commerce), então os aspectos são `produto`, `entrega` e `atendimento`.
+## Conteúdo do repositório
+
+```
+notebooks/   01_preparar_dados_colab, 02_qlora_avaliacao_publicacao_colab, 03_analise_de_erros_colab
+results/     metricas.csv, loss_curve.png, erros_modelo.csv
+docs/        analise_de_erros.md, model_card_hf.md
+```
+
+- 🤗 **Adaptador:** [`thiag8ito/qwen2.5-1.5b-aspectos-ecommerce-ptbr-qlora`](https://huggingface.co/thiag8ito/qwen2.5-1.5b-aspectos-ecommerce-ptbr-qlora)
+- 🔍 **Análise de erros completa:** [`docs/analise_de_erros.md`](docs/analise_de_erros.md)
+- 📄 **Model card:** [`docs/model_card_hf.md`](docs/model_card_hf.md)
+
+## Uso rápido
+
+```python
+import torch
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+base = "Qwen/Qwen2.5-1.5B-Instruct"
+tok = AutoTokenizer.from_pretrained(base)
+bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.float16)
+model = AutoModelForCausalLM.from_pretrained(base, quantization_config=bnb, device_map="auto")
+model = PeftModel.from_pretrained(model, "thiag8ito/qwen2.5-1.5b-aspectos-ecommerce-ptbr-qlora")
+```
+
+O prompt de sistema precisa ser **o mesmo usado no treino**; ele está completo no [model card](docs/model_card_hf.md), junto com o exemplo de geração.
 
 ## Pipeline
 
 1. **Dados:** Olist, texto de 25–400 caracteres, deduplicado, amostra balanceada por nota (~3.000).
 2. **Rótulos silver:** Qwen2.5-7B-Instruct em 4-bit rodando no Colab, uma avaliação por pedido, guia de anotação fixo com 4 exemplos few-shot e decodificação determinística (sem amostragem).
-3. **Teste gold:** 300 avaliações separadas e **revisadas por humano** (`300` de 300 linhas revisadas, ~10% alteradas em relação ao LLM). Concordância LLM × humano (kappa) por aspecto: produto `0.84`, entrega `0.88`, atendimento `0.78`. Indica a qualidade dos rótulos silver usados no treino. Regras de decisão na seção **Guia de anotação**.
+3. **Teste gold:** 300 avaliações separadas e **revisadas por humano** (300 de 300 linhas revisadas, ~10% alteradas em relação ao LLM). Concordância LLM × humano (kappa de Cohen): produto 0.84, entrega 0.88, atendimento 0.78. Indica a qualidade dos rótulos silver usados no treino. Regras de decisão na seção [Guia de anotação](#guia-de-anotação).
 4. **Baselines:** (a) o próprio Qwen zero-shot, (b) TF-IDF + Regressão Logística.
 5. **QLoRA:** NF4 + LoRA r=16 em todas as projeções, loss só na resposta, 2 épocas.
-6. **Avaliação, análise de erros, publicação** com model card gerado a partir das métricas reais.
+6. **Avaliação, análise de erros e publicação** com model card gerado a partir das métricas reais.
 
 ## Guia de anotação
 
@@ -49,6 +86,8 @@ Cada aspecto é julgado separadamente, **apenas pelo texto** (a nota da avaliaç
 - Avaliação mista ("produto bom, mas atrasou") → um rótulo por aspecto, não o mesmo para todos.
 - Ironia ("Parabéns, só demorou 3 meses") → rotulado pelo sentido real (`entrega=negativo`).
 
+> **Inconsistências conhecidas:** na revisão, elogios genéricos ("tudo transcorreu bem") e itens não recebidos ("não recebi o produto") ficaram rotulados de formas diferentes entre avaliações. Detalhes e impacto nas métricas em [`docs/analise_de_erros.md`](docs/analise_de_erros.md).
+
 **Processo:** rótulos silver gerados por LLM com este mesmo guia (few-shot, decodificação determinística); depois, revisão manual das linhas do teste, corrigindo o que divergia do guia. Erros recorrentes do LLM observados na revisão: marcar `ausente` quando o aspecto está implícito, confundir `neutro` com `ausente`, ignorar ironia.
 
 ## Resultados (conjunto de teste, n=300, rótulo humano)
@@ -67,47 +106,17 @@ F1 macro e acurácia por aspecto:
 | TF-IDF + LogReg | 0.690 | 0.604 | 0.466 | 0.767 | 0.803 | 0.740 |
 | **Qwen2.5-1.5B + QLoRA** | **0.805** | **0.689** | **0.577** | **0.877** | **0.913** | **0.887** |
 
-**Leitura:** o QLoRA sobe o F1 macro médio de 0.472 para 0.691 em relação ao zero-shot e supera o TF-IDF em 0.104 pontos de F1 macro e 0.246 de exact match; além disso, a saída passa a ser sempre um JSON válido. `atendimento` é o aspecto mais difícil: a acurácia é alta (0.887), mas o F1 macro é bem menor (0.577), o que sugere classes raras com pouco suporte.
+Métricas completas em [`results/metricas.csv`](results/metricas.csv). Com 300 exemplos, diferenças pequenas entre modelos devem ser lidas com cautela: não foram calculados intervalos de confiança.
 
-![loss](results/loss_curve.png)
+**Leitura:** o QLoRA sobe o F1 macro médio de 0.472 para 0.691 em relação ao zero-shot e supera o TF-IDF em 0.104 de F1 macro e 0.246 de exact match; além disso, a saída passa a ser sempre um JSON válido. `atendimento` é o aspecto mais difícil: a acurácia é alta (0.887), mas o F1 macro é bem menor (0.577). A [análise de erros](docs/analise_de_erros.md) mostra que 24 dos 34 erros nesse aspecto são menções não detectadas (o modelo previu `ausente`).
+
+![Curva de loss](results/loss_curve.png)
 
 **Curva de loss:** a loss de validação cai de 0.074 (passo 50) para 0.051 (passo 300) sem voltar a subir, e a de treino fica um pouco abaixo (cerca de 0.03 a 0.04), sem sinal claro de overfitting em 2 épocas. A loss é medida só nos tokens da resposta, boa parte deles o esqueleto fixo do JSON, então valores baixos não equivalem a acurácia alta; o que mede a qualidade é o F1 no teste.
 
-### Análise de erros
+### Principais achados dos erros
 
-Fonte: `results/erros_modelo.csv` (gerado pelo notebook 03). O modelo errou **97 pares avaliação × aspecto**, em **80 das 300 avaliações** (26,7%; 63 avaliações com um erro e 17 com dois). Isso confere com o exact match de 0.733 (220 de 300 totalmente corretas).
-
-**Erros por tipo e aspecto** (tipos atribuídos automaticamente):
-
-| Tipo de erro | produto | entrega | atendimento | Total |
-|---|---|---|---|---|
-| Menção perdida (humano marcou o aspecto, modelo previu `ausente`) | 14 | 11 | 24 | **49** (51%) |
-| Menção falsa (humano marcou `ausente`, modelo previu sentimento) | 8 | 6 | 6 | 20 (21%) |
-| Neutro confundido com polaridade | 12 | 5 | 3 | 20 (21%) |
-| Polaridade invertida (positivo ↔ negativo) | 3 | 4 | 1 | 8 (8%) |
-| **Total** | **37** | **26** | **34** | **97** |
-
-Trocas mais frequentes (humano → modelo): `negativo→ausente` (22), `ausente→negativo` (14), `neutro→ausente` (14), `positivo→ausente` (13), `neutro→negativo` (7). Por nota, 31 dos 97 erros (32%) estão em avaliações de nota 1.
-
-**O que os erros mostram** (leitura dos 97 casos; as contagens por palavras-chave são aproximadas):
-
-1. **O modelo é conservador: prefere `ausente`.** Metade dos erros (49) são menções perdidas, e em `atendimento` são 24 de 34. Mais da metade dessas menções perdidas de atendimento envolve termos de troca, devolução, contato ou resposta da loja, em frases em que o atendimento está implícito ("... Quero devolver", "como ficamos?"). Em contrapartida, a polaridade invertida é rara (8%): quando o modelo reconhece o aspecto, na grande maioria das vezes acerta o sentimento.
-
-2. **Fronteira entre aspectos em "não recebi" e pedido incompleto** (cerca de 40% dos erros envolvem não recebimento, entrega parcial ou item errado). O mesmo tipo de caso aparece rotulado de formas diferentes: "PRODUTO NÃO RECEBIDO" tem `produto=negativo` no gabarito, enquanto "não recebi o produto no qual já paguei" tem `produto=ausente`; "Comprei 2 calculadoras e só recebi 1" tem `atendimento=negativo`. O modelo também oscila entre `produto`, `entrega` e `atendimento` nesses casos. A causa principal é a ambiguidade do guia de anotação, que ainda não define em qual aspecto cai o item não entregue.
-
-3. **Elogio genérico atribuído a aspectos.** Em frases como "Tudo transcorreu bem e superou minhas expectativas!" ou "Como sempre, compra segura", o gabarito marca `entrega` e `atendimento` como positivos, enquanto o guia manda não inferir (`ausente`). Sete dos 13 casos de menção perdida com `positivo` no gabarito são desse tipo. Aqui o "erro" é discordância entre o gabarito e o próprio guia.
-
-4. **Neutro, concessões e avaliações mistas** (20 erros de neutro confundido, 12 deles em `produto`). Frases com "mas", "porém" ou "embora" aparecem em 8 desses 20 e em metade das polaridades invertidas. Exemplos: "Daria 5 estrelas se a entrega de ambos os produtos fossem juntos! ... Satisfeita" (gabarito `entrega=neutro`, modelo `negativo`) e uma avaliação que critica o valor do frete, mas reconhece que o prazo foi cumprido. O limite entre `neutro` e polaridade é subjetivo e vulnerável a divergências.
-
-5. **Erros reais de leitura.** O modelo de 1,5B erra raciocínios com datas e contrastes. "A entrega estava prevista para 22/08, chegou dia 05/08" recebeu `entrega=negativo` (era positivo), e "entregue 2 dias depois da data prevista ... muito satisfeita com o produto" recebeu `entrega=positivo`. Em "Muito bonita a cortina, só deveria ser melhor o material desfia muito fácil", o elogio dominou a ressalva.
-
-6. **Gabarito possivelmente incorreto.** Alguns erros apontam para o rótulo humano, e não para o modelo: uma avaliação sobre um tapete menor que o anunciado tem `entrega=positivo` no gabarito; "Produto pirata ... solicitei a troca" tem `atendimento=positivo`; uma reclamação de caixa amassada e parafusos soltos tem `atendimento=negativo`; e uma avaliação que elogia apenas a entrega tem `produto=positivo`. Esses casos (ids 2230, 741, 817 e 2323, em `results/erros_modelo.csv`) devem ser revisados, e se corrigidos as métricas medidas sobem um pouco.
-
-**O que fazer a respeito**
-- **Guia de anotação:** definir explicitamente onde caem "item não recebido" e "pedido incompleto" (sugestão: `entrega`), elogios genéricos (`positivo`) e pedidos de troca ou devolução sem avaliação do atendimento (`atendimento=neutro`). Depois, **re-rotular e re-revisar** os casos de borda, no treino (silver) e no teste.
-- **Menos conservadorismo:** mais exemplos de atendimento implícito e de `neutro` no treino, ou um limiar de decisão para `ausente`, já que o erro dominante é deixar de marcar o aspecto.
-- **Modelo e contexto:** testar o Qwen2.5-3B ou um prompt com exemplos de casos de borda para os erros de leitura (datas, contrastes).
-- **Medição:** com um segundo anotador sobre uma amostra do teste, medir a concordância humano × humano. Esse é o teto realista do problema.
+O modelo errou 97 pares avaliação × aspecto em 80 das 300 avaliações. Metade dos erros (49) é **menção perdida** (o modelo prevê `ausente` onde o humano marcou o aspecto), e a polaridade invertida é rara (8). Parte relevante dos erros vem de **inconsistência do gabarito** (itens não recebidos e elogios genéricos). Análise completa, com exemplos: [`docs/analise_de_erros.md`](docs/analise_de_erros.md).
 
 ## Decisões e trade-offs
 
@@ -119,30 +128,40 @@ Trocas mais frequentes (humano → modelo): `negativo→ausente` (22), `ausente�
 
 ## Limitações
 
-Rótulos de treino herdam vieses do LLM anotador; domínio é e-commerce 2016–2018, não delivery; classe `neutro` é rara; sem calibração de confiança.
+- Rótulos de treino herdam vieses do LLM anotador.
+- Domínio é e-commerce (2016–2018), não delivery de comida; para outro domínio é preciso reajustar com dados próprios.
+- A classe `neutro` é rara, então as métricas nela têm alta variância.
+- Teste de 300 exemplos, anotado por uma pessoa, sem concordância humano × humano medida e sem intervalos de confiança.
+- Sem calibração de confiança.
 
 ## Próximos passos
 
-Few-shot e prompt engineering como baseline mais forte; ablação de `r` (8/16/32) e de 0.5B vs 1.5B; calibração e abstenção com baixa confiança; servir com vLLM/merge do adaptador e medir latência e custo por mil avaliações; monitoramento de drift.
+- Intervalos de confiança por bootstrap nas métricas.
+- Corrigir o guia de anotação nos casos de borda e re-rotular treino e teste.
+- Few-shot e prompt engineering como baseline mais forte; ablação de `r` (8/16/32) e de 0.5B vs 1.5B.
+- Calibração e abstenção com baixa confiança.
+- Servir com vLLM (ou mesclar o adaptador) e medir latência e custo por mil avaliações; monitoramento de drift.
 
 ## Como rodar
 
 Todo o projeto roda no **Google Colab** com GPU T4 (gratuita ou com unidades de computação), sem GPU local e **sem chave de API**. Os rótulos são gerados por um modelo aberto (Qwen2.5-7B-Instruct) dentro do próprio Colab. Os notebooks são executados em ordem e trocam dados pelo arquivo `data.zip`.
 
-**Pré-requisitos:** conta Google (Colab) e conta no Hugging Face com um token de **escrita** (huggingface.co/settings/tokens), necessário só para publicar o adaptador no notebook 2.
+**Pré-requisitos:** conta Google (Colab) e conta no Hugging Face com um token de **escrita** ([huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)), necessário só para publicar o adaptador no notebook 2.
 
-| # | Notebook | O que faz | Entrada | Saída | Tempo na T4 |
-|---|---|---|---|---|---|
-| 1 | [`01_preparar_dados_colab`](notebooks/01_preparar_dados_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tunning_qlora/blob/main/notebooks/01_preparar_dados_colab.ipynb) | Baixa o Olist, rotula com o Qwen 7B, separa treino/validação/teste, exporta o teste para revisão e calcula o kappa | CSV revisado | `data.zip` | ~30 min |
-| 2 | [`02_qlora_avaliacao_publicacao_colab`](notebooks/02_qlora_avaliacao_publicacao_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tunning_qlora/blob/main/notebooks/02_qlora_avaliacao_publicacao_colab.ipynb) | Mede o baseline, treina o QLoRA, avalia e publica o adaptador | `data.zip` | `resultados.zip` e adaptador no Hugging Face | ~1 h |
-| 3 | [`03_analise_de_erros_colab`](notebooks/03_analise_de_erros_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tunning_qlora/blob/main/notebooks/03_analise_de_erros_colab.ipynb) | Carrega o adaptador do Hub e analisa os erros no teste | `data.zip` | `erros_modelo.csv` | ~5 min |
+| # | Notebook | O que faz | Entrada | Saída |
+|---|---|---|---|---|
+| 1 | [`01_preparar_dados_colab`](notebooks/01_preparar_dados_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tuning_qlora/blob/main/notebooks/01_preparar_dados_colab.ipynb) | Baixa o Olist, rotula com o Qwen 7B, separa treino/validação/teste, exporta o teste para revisão e calcula o kappa | CSV revisado | `data.zip` |
+| 2 | [`02_qlora_avaliacao_publicacao_colab`](notebooks/02_qlora_avaliacao_publicacao_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tuning_qlora/blob/main/notebooks/02_qlora_avaliacao_publicacao_colab.ipynb) | Mede o baseline, treina o QLoRA, avalia e publica o adaptador | `data.zip` | `resultados.zip` e adaptador no Hugging Face |
+| 3 | [`03_analise_de_erros_colab`](notebooks/03_analise_de_erros_colab.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/thiag8ito/fine-tuning_qlora/blob/main/notebooks/03_analise_de_erros_colab.ipynb) | Carrega o adaptador do Hub e analisa os erros no teste | `data.zip` | `erros_modelo.csv` |
+
+Tempos de referência na T4: a rotulagem de 3.000 avaliações com o Qwen 7B levou cerca de 24 minutos; o treino completo tem ~300 passos.
 
 ### Passo a passo
 
 1. **Notebook 1.** Abra pelo botão, escolha *Ambiente de execução → Alterar tipo → T4 GPU* e rode as células em ordem. Ao fim da rotulagem, o `test_para_revisao.csv` é baixado automaticamente.
 2. **Revisão humana.** Abra o CSV no Google Sheets, corrija `produto`, `entrega` e `atendimento` conforme o [guia de anotação](#guia-de-anotação), baixe como CSV e envie na célula seguinte. Ela confere se o arquivo pertence ao mesmo split, calcula o kappa e verifica que treino, validação e teste não se sobrepõem. Por fim, baixe o `data.zip`.
 3. **Notebook 2.** Em uma sessão nova com T4, envie o `data.zip` na primeira célula, ajuste `HF_USER` e faça o login quando a célula de publicação pedir o token. Antes de treinar, confira a linha `passos totais` (~300 com 2.400 amostras de treino). No fim, baixe o `resultados.zip`.
-4. **Notebook 3.** Em outra sessão, envie o `data.zip` de novo. Ele gera `results/erros_modelo.csv`, que alimenta a análise de erros.
+4. **Notebook 3.** Em outra sessão, envie o `data.zip` de novo. Ele gera `results/erros_modelo.csv`, que alimenta a [análise de erros](docs/analise_de_erros.md).
 
 Os arquivos do Colab somem quando a sessão termina, então baixe o `data.zip`, o `resultados.zip` e o `erros_modelo.csv` antes de fechar.
 
@@ -151,20 +170,21 @@ Os arquivos do Colab somem quando a sessão termina, então baixe o `data.zip`, 
 - As sementes são fixas (`SEED = 42`), e as versões testadas estão em [Versões usadas](#versões-usadas).
 - A rotulagem silver e o treino em 4-bit na GPU não são totalmente determinísticos, então reexecutar pode dar números ligeiramente diferentes.
 - O teste revisado **não é distribuído** (o Olist tem licença própria). Quem repetir o projeto gera o seu `test_para_revisao.csv` e faz a própria revisão, e as métricas podem diferir.
-- Se a GPU gratuita estiver bloqueada, espere liberar ou use o Pay As You Go do Colab.  
+- Se a GPU gratuita estiver bloqueada, espere liberar ou use o Pay As You Go do Colab.
 
-Versões usadas: 
+### Versões usadas
 
-python=3.12.10
-accelerate==1.15.0  
-bitsandbytes==0.50.2  
-peft==0.21.2  
-torch==2.11.0+cu130  
-torchao==0.10.0  
-torchcodec==0.11.0+cu130  
-torchdata==0.11.0  
-torchsummary==1.5.1    
-torchvision==0.26.0+cu130  
-transformers==5.22.0  
+| Componente | Versão |
+|---|---|
+| Python | 3.12.10 |
+| torch | 2.11.0+cu130 |
+| transformers | 5.22.0 |
+| peft | 0.21.2 |
+| bitsandbytes | 0.50.2 |
+| accelerate | 1.15.0 |
 
+O `transformers` 5.x removeu o argumento `warmup_ratio` de `TrainingArguments`; por isso o notebook 2 calcula o aquecimento em passos (`warmup_steps`).
 
+## Licença e dados
+
+O código deste repositório está sob a licença [Apache-2.0](LICENSE). O dataset **Olist** ([Brazilian E-Commerce Public Dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)) tem licença própria e não é redistribuído aqui. Os modelos base (Qwen2.5) seguem as licenças dos respectivos autores.
