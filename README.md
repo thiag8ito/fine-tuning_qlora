@@ -49,7 +49,7 @@ Cada aspecto é julgado separadamente, **apenas pelo texto** (a nota da avaliaç
 - Avaliação mista ("produto bom, mas atrasou") → um rótulo por aspecto, não o mesmo para todos.
 - Ironia ("Parabéns, só demorou 3 meses") → rotulado pelo sentido real (`entrega=negativo`).
 
-**Processo:** rótulos silver gerados por LLM com este mesmo guia (few-shot, decodificação determinística); depois, revisão manual das linhas do teste, corrigindo o que divergia do guia. Erros recorrentes do LLM observados na revisão: marcar `ausente` quando o aspecto está implícito; confundir `neutro` com `ausente`; ignorar ironia).
+**Processo:** rótulos silver gerados por LLM com este mesmo guia (few-shot, decodificação determinística); depois, revisão manual das linhas do teste, corrigindo o que divergia do guia. Erros recorrentes do LLM observados na revisão: marcar `ausente` quando o aspecto está implícito, confundir `neutro` com `ausente`, ignorar ironia.
 
 ## Resultados (conjunto de teste, n=300, rótulo humano)
 
@@ -67,7 +67,7 @@ F1 macro e acurácia por aspecto:
 | TF-IDF + LogReg | 0.690 | 0.604 | 0.466 | 0.767 | 0.803 | 0.740 |
 | **Qwen2.5-1.5B + QLoRA** | **0.805** | **0.689** | **0.577** | **0.877** | **0.913** | **0.887** |
 
-**Leitura:** o QLoRA sobe o F1 macro médio de 0.472 para 0.691 em relação ao zero-shot e supera o TF-IDF em 0.104 pontos de F1 macro e 0.246 de exact match; além disso, a saída passa a ser sempre um JSON válido. `atendimento` é o aspecto mais difícil: a acurácia é alta (0.887), mas o F1 macro é bem menor (0.577), o que sugere classes raras com pouco suporte (hipótese a confirmar no relatório por classe do notebook 03).
+**Leitura:** o QLoRA sobe o F1 macro médio de 0.472 para 0.691 em relação ao zero-shot e supera o TF-IDF em 0.104 pontos de F1 macro e 0.246 de exact match; além disso, a saída passa a ser sempre um JSON válido. `atendimento` é o aspecto mais difícil: a acurácia é alta (0.887), mas o F1 macro é bem menor (0.577), o que sugere classes raras com pouco suporte.
 
 ![loss](results/loss_curve.png)
 
@@ -104,7 +104,7 @@ Trocas mais frequentes (humano → modelo): `negativo→ausente` (22), `ausente�
 6. **Gabarito possivelmente incorreto.** Alguns erros apontam para o rótulo humano, e não para o modelo: uma avaliação sobre um tapete menor que o anunciado tem `entrega=positivo` no gabarito; "Produto pirata ... solicitei a troca" tem `atendimento=positivo`; uma reclamação de caixa amassada e parafusos soltos tem `atendimento=negativo`; e uma avaliação que elogia apenas a entrega tem `produto=positivo`. Esses casos (ids 2230, 741, 817 e 2323, em `results/erros_modelo.csv`) devem ser revisados, e se corrigidos as métricas medidas sobem um pouco.
 
 **O que fazer a respeito**
-- **Guia de anotação:** definir explicitamente onde caem "item não recebido" e "pedido incompleto" (sugestão: `entrega`), elogios genéricos (`ausente`) e pedidos de troca ou devolução sem avaliação do atendimento (`atendimento=neutro`). Depois, **re-rotular e re-revisar** os casos de borda, no treino (silver) e no teste.
+- **Guia de anotação:** definir explicitamente onde caem "item não recebido" e "pedido incompleto" (sugestão: `entrega`), elogios genéricos (`positivo`) e pedidos de troca ou devolução sem avaliação do atendimento (`atendimento=neutro`). Depois, **re-rotular e re-revisar** os casos de borda, no treino (silver) e no teste.
 - **Menos conservadorismo:** mais exemplos de atendimento implícito e de `neutro` no treino, ou um limiar de decisão para `ausente`, já que o erro dominante é deixar de marcar o aspecto.
 - **Modelo e contexto:** testar o Qwen2.5-3B ou um prompt com exemplos de casos de borda para os erros de leitura (datas, contrastes).
 - **Medição:** com um segundo anotador sobre uma amostra do teste, medir a concordância humano × humano. Esse é o teto realista do problema.
@@ -151,21 +151,19 @@ Os arquivos do Colab somem quando a sessão termina, então baixe o `data.zip`, 
 - As sementes são fixas (`SEED = 42`), e as versões testadas estão em [Versões usadas](#versões-usadas).
 - A rotulagem silver e o treino em 4-bit na GPU não são totalmente determinísticos, então reexecutar pode dar números ligeiramente diferentes.
 - O teste revisado **não é distribuído** (o Olist tem licença própria). Quem repetir o projeto gera o seu `test_para_revisao.csv` e faz a própria revisão, e as métricas podem diferir.
-- Se a GPU gratuita estiver bloqueada, espere liberar ou use o Pay As You Go do Colab.
+- Se a GPU gratuita estiver bloqueada, espere liberar ou use o Pay As You Go do Colab.  
 
 Versões usadas: 
 
+python=3.12.10
 accelerate==1.15.0  
 bitsandbytes==0.50.2  
 peft==0.21.2  
-sentence-transformers==5.7.0  
 torch==2.11.0+cu130  
 torchao==0.10.0  
-torchaudio==2.11.0+cu130  
 torchcodec==0.11.0+cu130  
 torchdata==0.11.0  
-torchsummary==1.5.1  
-torchtune==0.6.1  
+torchsummary==1.5.1    
 torchvision==0.26.0+cu130  
 transformers==5.22.0  
 
