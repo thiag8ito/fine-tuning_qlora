@@ -5,7 +5,7 @@
 Análise dos erros do modelo `Qwen2.5-1.5B + QLoRA` no conjunto de teste (300 avaliações, rótulo humano).
 
 - **Fonte dos dados:** [`results/erros_modelo.csv`](../results/erros_modelo.csv), gerado pelo notebook `03_analise_de_erros_colab.ipynb`.
-- **Tipos de erro** atribuídos automaticamente pelo notebook; a **leitura qualitativa** (itens 1 a 6) foi feita sobre os 97 casos, e as contagens por palavras-chave são aproximadas.
+- **Tipos de erro** atribuídos automaticamente pelo notebook; a **leitura qualitativa** (itens 1 a 5) foi feita sobre os 97 casos, e as contagens por palavras-chave são aproximadas.
 
 ## Visão geral
 
@@ -35,7 +35,7 @@ Trocas mais frequentes (humano → modelo): `negativo→ausente` (22), `ausente�
 
 ## Impacto nas métricas
 
-Os itens 2, 3 e 6 indicam que parte dos 97 erros vem de **ruído e inconsistência do gabarito**, e não de falha do modelo. Por isso o F1 medido deve ser lido como um limite inferior do desempenho real, e o teto do problema é definido pela concordância entre anotadores humanos, que não foi medida.
+Os itens 2 e 3 indicam que parte dos 97 erros vem de **ruído e inconsistência do gabarito**, e não de falha do modelo. Por isso o F1 medido deve ser lido como um limite inferior do desempenho real, e o teto do problema é definido pela concordância entre anotadores humanos, que não foi medida.
 
 ## O que fazer a respeito
 
