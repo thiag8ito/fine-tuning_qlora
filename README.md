@@ -129,7 +129,7 @@ O modelo errou 97 pares avaliação × aspecto em 80 das 300 avaliações. Metad
 ## Limitações
 
 - Rótulos de treino herdam vieses do LLM anotador.
-- Domínio é e-commerce (2016–2018), não delivery de comida; para outro domínio é preciso reajustar com dados próprios.
+- Domínio é e-commerce (2016–2018) para outro domínio é preciso reajustar com dados próprios.
 - A classe `neutro` é rara, então as métricas nela têm alta variância.
 - Teste de 300 exemplos, anotado por uma pessoa, sem concordância humano × humano medida e sem intervalos de confiança.
 - Sem calibração de confiança.
